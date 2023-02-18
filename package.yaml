@@ -21,6 +21,18 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- srtree >= 0.1.2.1 && < 0.1.3
+- pandoc-symreg >= 0.1.0.1
+- hmatrix
+- hmatrix-gsl
+- hmatrix-morpheus
+- bytestring >= 0.11 && < 0.12
+- optparse-applicative >= 0.17 && < 0.18
+- mtl >= 2.2 && < 2.3
+- vector
+- split
+- srtree-opt
+- srtree-eqsat
 
 ghc-options:
 - -Wall
