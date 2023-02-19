@@ -1,22 +1,22 @@
 {-# language LambdaCase #-}
+{-# language ImportQualifiedPost #-}
 module Main (main) where
 
+import Control.Monad (forM_, unless)
+import Data.Bifunctor (first)
+import Data.ByteString.Char8 qualified as B
+import Data.Char (toLower, toUpper)
+import Data.List (intercalate)
+import Data.SRTree (SRTree, countNodes)
+import Data.SRTree.EqSat (simplifyEqSat)
 import Data.SRTree.Opt
+import Data.SRTree.Stats.MDL (aic, bic, mdl, mdlFreq)
+import Numeric.LinearAlgebra qualified as LA
 import Options.Applicative
-import Data.Bifunctor ( first )
-import Data.Char ( toLower, toUpper )
-import Text.Read ( readMaybe )
-import Data.List ( intercalate )
-import Text.ParseSR ( SRAlgs(..), Output(..) )
-import Text.ParseSR.IO ( withInput, withOutput )
-import qualified Data.ByteString.Char8 as B
-import Data.SRTree
-import qualified Data.SRTree.Print as P
-import System.IO 
-import Control.Monad
-import Data.SRTree.Stats.MDL
-import Data.SRTree.EqSat
-import qualified Numeric.LinearAlgebra as LA
+import System.IO (IOMode (WriteMode), hClose, hPutStrLn, openFile, stdout)
+import Text.ParseSR (SRAlgs (..))
+import Text.ParseSR.IO (withInput)
+import Text.Read (readMaybe)
 
 envelope :: a -> [a] -> [a]
 envelope c xs = c : xs <> [c]
@@ -33,9 +33,9 @@ sralgsReader = do
 
 columnsReader :: ReadM [Int]
 columnsReader = do
-  cols <- ('[':) . (<> "]") <$> str
-  eitherReader $ case readMaybe cols of
-    Nothing -> pure . Left $ "wrong format " <> cols
+  colsStr <- ('[':) . (<> "]") <$> str
+  eitherReader $ case readMaybe colsStr of
+    Nothing -> pure . Left $ "wrong format " <> colsStr
     Just x  -> pure . Right $ x
 
 data Args = Args
@@ -134,17 +134,16 @@ main = do
   args <- execParser opts
   (((xTr, yTr),(xVal, yVal)), headers) <- openData args
   ((xTe, yTe), _) <- loadDataset (test args) (cols args) (target args) (hasHeader args)
-  let optimizer = optimize (niter args) xTr yTr
-      varnames  = intercalate "," (map (B.unpack.fst) headers)
-      calc f tree x y theta = [f xTr yTr, f xVal yVal, f xTe yTe]
-      genStats  tree = let tree' = if (simpl args) then simplifyEqSat tree else tree
-                           t = optimizer tree'
-                           n = countNodes t
-                           theta = getTheta t
-                           p = LA.size theta
-                           sses = map show [sse xTr yTr t, sse xVal yVal t, sse xTe yTe t]
-                           mses = map show [mse xTr yTr t, mse xVal yVal t, mse xTe yTe t]
-                           cmplx = map show [bic t xTr yTr theta, aic t xTr yTr theta, mdl t xTr yTr theta, mdlFreq t xTr yTr theta]
+  let optimizer     = optimize (niter args) xTr yTr
+      varnames      = intercalate "," (map (B.unpack.fst) headers)
+      genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
+                          t     = optimizer tree'
+                          n     = countNodes t
+                          theta = getTheta t
+                          p     = LA.size theta
+                          sses  = map show [sse xTr yTr t, sse xVal yVal t, sse xTe yTe t]
+                          mses  = map show [mse xTr yTr t, mse xVal yVal t, mse xTe yTe t]
+                          cmplx = map show [bic t xTr yTr theta, aic t xTr yTr theta, mdl t xTr yTr theta, mdlFreq t xTr yTr theta]
                         in intercalate "," $ [show n, show p] <> sses <> mses <> cmplx
   withInput (infile args) (from args) varnames False
     >>= printResults (outfile args) genStats

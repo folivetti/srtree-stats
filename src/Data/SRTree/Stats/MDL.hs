@@ -1,12 +1,11 @@
 {-# language FlexibleInstances #-}
-module Data.SRTree.Stats.MDL where
+module Data.SRTree.Stats.MDL ( aic, bic, mdl, mdlFreq )
+    where
 
 import Data.List ( nub )
 import Data.Maybe ( fromJust )
 import Control.Monad.Reader
-import Debug.Trace ( trace )
 import qualified Numeric.LinearAlgebra as LA
-import qualified Data.Vector as V
 import Data.SRTree
 import Data.SRTree.Opt
 
@@ -22,7 +21,6 @@ aic :: LogFun
 aic t x y theta = 2 * p + 2 * negLogLikelihood t x y theta
   where
     p = fromIntegral $ LA.size theta
-    n = fromIntegral $ LA.size y
 
 buildMDL :: [LogFun] -> LogFun
 buildMDL fs t x y theta = foldr (\f acc -> acc + f t x y theta) 0 fs
@@ -30,20 +28,11 @@ buildMDL fs t x y theta = foldr (\f acc -> acc + f t x y theta) 0 fs
 mdl :: LogFun
 mdl = buildMDL [negLogLikelihood, logFunctionalSimple, logParameters]
 
-mdlNoFun :: LogFun
-mdlNoFun = buildMDL [negLogLikelihood, logParameters]
-
 mdlFreq :: LogFun
 mdlFreq = buildMDL [negLogLikelihood, logFunctionalFreq, logParameters]
 
-mdlFreqUniq :: LogFun
-mdlFreqUniq = buildMDL [negLogLikelihood, logFunctionalFreqUniq, logParameters]
-
-mdlNoFish :: LogFun
-mdlNoFish = buildMDL [negLogLikelihood, logFunctionalFreq, logParametersTheta]
-
 negLogLikelihood :: SRTree Int Double -> Columns -> Column -> Column -> Double
-negLogLikelihood t x y theta = 0.5*n*(log(2*pi) + log(ssr/n) + 1)
+negLogLikelihood t x y _ = 0.5*n*(log(2*pi) + log(ssr/n) + 1)
   where
     n   = fromIntegral $ LA.size y
     ssr = sse x y t
@@ -65,20 +54,15 @@ logFunctionalFreqUniq t _ _ _ = opToNatUniq t + logC t
   where
     logC = sum . map log . getIntConsts
 
-logParametersTheta :: SRTree Int Double -> Columns -> Column -> Column -> Double
-logParametersTheta t x y theta = -(fromIntegral (LA.size theta) / 2) * log 3 +  sum (LA.toList (log . abs $ theta))
-
 logParameters :: SRTree Int Double -> Columns -> Column -> Column -> Double
 logParameters t x y theta = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
   where
     p         = LA.size theta
-    n         = LA.size y
     t'        = paramToVar $ varToConst x $ constToParam t
     res       = y - evalSRTree theta t'
     logTheta  = LA.toList . log . abs $ theta
     logFisher = map ( (* 0.5) . log) fisher
     s2        = mse x y t
-    fii       = [sum $ LA.toList $ (fv*fv) | ix <- [0 .. p-1], let fv = evalSRTree theta (deriveBy ix t')]
     fisher    = do ix <- [0 .. p-1]
                    let f'      = deriveBy ix t'
                        f''     = deriveBy ix f'
