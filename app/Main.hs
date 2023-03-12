@@ -38,6 +38,13 @@ columnsReader = do
     Nothing -> pure . Left $ "wrong format " <> colsStr
     Just x  -> pure . Right $ x
 
+s2Reader :: ReadM (Maybe Double)
+s2Reader = do
+  s <- str
+  eitherReader $ case readMaybe s of
+    Nothing -> pure . Left $ "wrong format " <> s
+    mx      -> pure . Right $ mx
+
 data Args = Args
     {   from        :: SRAlgs
       , infile      :: String
@@ -50,6 +57,8 @@ data Args = Args
       , niter       :: Int
       , hasHeader   :: Bool
       , simpl       :: Bool
+      , gz          :: Bool
+      , ms2         :: Maybe Double
     } deriving Show
 
 opt :: Parser Args
@@ -115,10 +124,19 @@ opt = Args
     <*> switch
         ( long "simplify"
         <> help "Apply EqSat simplification." )
+    <*> switch
+        ( long "gz"
+        <> help "Gzipped files.")
+   <*> option s2Reader
+       ( long "s2"
+       <> metavar "S2"
+       <> showDefault
+       <> value Nothing
+       <> help "Estimated s^2 of the data. If not passed, it uses the model MSE.")
 
 openData :: Args -> IO (((Columns, Column), (Columns, Column)), [(B.ByteString, Int)])
 openData args = first (splitTrainVal (trainRows args)) 
-             <$> loadDataset (dataset args) (cols args) (target args) (hasHeader args)
+             <$> loadDataset (dataset args) (cols args) (target args) (hasHeader args) (gz args)
 
 printResults :: String -> (SRTree Int Double -> String) -> [Either String (SRTree Int Double)] -> IO ()
 printResults fname f exprs = do
@@ -127,13 +145,14 @@ printResults fname f exprs = do
   forM_ exprs $ \case 
                    Left  err -> hPutStrLn h $ "invalid expression: " <> err
                    Right ex  -> hPutStrLn h $ f ex
+                   -- Right ex  -> print ex >> (hPutStrLn h $ f ex)
   unless (null fname) $ hClose h
 
 main :: IO ()
 main = do
   args <- execParser opts
   (((xTr, yTr),(xVal, yVal)), headers) <- openData args
-  ((xTe, yTe), _) <- loadDataset (test args) (cols args) (target args) (hasHeader args)
+  ((xTe, yTe), _) <- loadDataset (test args) (cols args) (target args) (hasHeader args) (gz args)
   let optimizer     = optimize (niter args) xTr yTr
       varnames      = intercalate "," (map (B.unpack.fst) headers)
       genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
@@ -141,11 +160,12 @@ main = do
                           n     = countNodes t
                           theta = getTheta t
                           p     = LA.size theta
+                          s2    = ms2 args
                           sses  = map show [sse xTr yTr t, sse xVal yVal t, sse xTe yTe t]
                           mses  = map show [mse xTr yTr t, mse xVal yVal t, mse xTe yTe t]
-                          cmplx = map show [bic t xTr yTr theta, aic t xTr yTr theta, mdl t xTr yTr theta, mdlFreq t xTr yTr theta]
+                          cmplx = map show [bic s2 t xTr yTr theta, aic s2 t xTr yTr theta, mdl s2 t xTr yTr theta, mdlFreq s2 t xTr yTr theta]
                         in intercalate "," $ [show n, show p] <> sses <> mses <> cmplx
-  withInput (infile args) (from args) varnames False
+  withInput (infile args) (from args) varnames False False
     >>= printResults (outfile args) genStats
   
   where 

@@ -11,31 +11,35 @@ import Data.SRTree.Opt
 
 type LogFun = SRTree Int Double -> Columns -> Column -> Column -> Double
 
-bic :: LogFun
-bic t x y theta = p * log n + 2 * negLogLikelihood t x y theta
+bic :: Maybe Double -> LogFun
+bic s2 t x y theta = p * log n + 2 * negLogLikelihood s2 t x y theta
   where
     p = fromIntegral $ LA.size theta
     n = fromIntegral $ LA.size y
 
-aic :: LogFun
-aic t x y theta = 2 * p + 2 * negLogLikelihood t x y theta
+aic :: Maybe Double -> LogFun
+aic s2 t x y theta = 2 * p + 2 * negLogLikelihood s2 t x y theta
   where
     p = fromIntegral $ LA.size theta
+    n   = fromIntegral $ LA.size y
 
 buildMDL :: [LogFun] -> LogFun
 buildMDL fs t x y theta = foldr (\f acc -> acc + f t x y theta) 0 fs
 
-mdl :: LogFun
-mdl = buildMDL [negLogLikelihood, logFunctionalSimple, logParameters]
+mdl :: Maybe Double -> LogFun
+mdl s2 = buildMDL [negLogLikelihood s2, logFunctionalSimple, logParameters]
 
-mdlFreq :: LogFun
-mdlFreq = buildMDL [negLogLikelihood, logFunctionalFreq, logParameters]
+mdlFreq :: Maybe Double -> LogFun
+mdlFreq s2 = buildMDL [negLogLikelihood s2, logFunctionalFreq, logParameters]
 
-negLogLikelihood :: SRTree Int Double -> Columns -> Column -> Column -> Double
-negLogLikelihood t x y _ = 0.5*n*(log(2*pi) + log(ssr/n) + 1)
+negLogLikelihood :: Maybe Double -> SRTree Int Double -> Columns -> Column -> Column -> Double
+negLogLikelihood ms2 t x y _ = 0.5*n*log(2*pi*s2) + 0.5*ssr/s2-- 0.5*n*(log(2*pi) + log(ssr/n) + 1)
   where
     n   = fromIntegral $ LA.size y
     ssr = sse x y t
+    s2 = case ms2 of
+           Nothing -> ssr/n
+           Just x  -> x
 
 logFunctionalSimple :: SRTree Int Double -> Columns -> Column -> Column -> Double
 logFunctionalSimple t _ _ _ = countNodes' t * log (countUniqueTokens' t) + logC t

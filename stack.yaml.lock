@@ -12,12 +12,16 @@ packages:
   original:
     hackage: srtree-0.1.2.1
 - completed:
-    hackage: pandoc-symreg-0.1.0.1@sha256:cd15444bdd7efc916b9bc8decd23816054c90ecc4064080aa18d08b29fa1cb30,2785
+    commit: 9862af0396aaea5fa6b0685fb74032d7d52405ce
+    git: https://github.com/folivetti/pandoc-symreg.git
+    name: pandoc-symreg
     pantry-tree:
-      sha256: ab8c4f2ad2488eed54e9a2ff7ce53cf3a67e10be9d66e2b89134e20056d98bac
-      size: 485
+      sha256: 41228c09df3d00d39fcb6a02424866dc1a038010a4312d0ed85d8a7e7285458d
+      size: 2062
+    version: 0.1.1.0
   original:
-    hackage: pandoc-symreg-0.1.0.1
+    commit: 9862af0396aaea5fa6b0685fb74032d7d52405ce
+    git: https://github.com/folivetti/pandoc-symreg.git
 - completed:
     hackage: hegg-0.3.0.0@sha256:913a91c7326a767626d6bc949ea38af857cc6dee22b3e49270f7342e2b2bf762,5718
     pantry-tree:
@@ -26,26 +30,26 @@ packages:
   original:
     hackage: hegg-0.3.0.0
 - completed:
-    commit: 368cd068dfe9524d206a34028d80a969d2dbc6d4
+    commit: 5ae020dd368dced9f84d161ccd176f3451af381d
     git: https://github.com/folivetti/srtree-opt.git
     name: srtree-opt
     pantry-tree:
-      sha256: 87fac7593828dcf469e28b312bc3c36e4ea9d6ddfd9ca323da2423954d451624
-      size: 955
+      sha256: b001e13ab47d1960015a48347577b7da0d77412759853b789682fa25bc94dd60
+      size: 1017
     version: 0.1.0.0
   original:
-    commit: 368cd068dfe9524d206a34028d80a969d2dbc6d4
+    commit: 5ae020dd368dced9f84d161ccd176f3451af381d
     git: https://github.com/folivetti/srtree-opt.git
 - completed:
-    commit: e22efe20860f87c8202efd57d3b1682ecd4b6cb3
+    commit: 756e097f76778216d4289913e850811b4b7b8a62
     git: https://github.com/folivetti/srtree-eqsat.git
     name: srtree-eqsat
     pantry-tree:
-      sha256: 3208d517f2cffddd5d58aeac45aa64dff446cd198abca284ae1e1c0e4a67411c
-      size: 692
+      sha256: da3958a7afc061e98fff4e622012827c0ae831190766582d141504d5c0053c2d
+      size: 693
     version: 0.1.0.0
   original:
-    commit: e22efe20860f87c8202efd57d3b1682ecd4b6cb3
+    commit: 756e097f76778216d4289913e850811b4b7b8a62
     git: https://github.com/folivetti/srtree-eqsat.git
 snapshots:
 - completed:
