@@ -18,6 +18,8 @@ import Text.ParseSR (SRAlgs (..))
 import Text.ParseSR.IO (withInput)
 import Text.Read (readMaybe)
 
+import qualified Data.SRTree.Print as SRP
+
 envelope :: a -> [a] -> [a]
 envelope c xs = c : xs <> [c]
 
@@ -145,7 +147,7 @@ printResults fname f exprs = do
   forM_ exprs $ \case 
                    Left  err -> hPutStrLn h $ "invalid expression: " <> err
                    Right ex  -> hPutStrLn h $ f ex
-                   -- Right ex  -> print ex >> (hPutStrLn h $ f ex)
+                   -- Right ex  -> putStrLn (SRP.showDefault ex) >> (hPutStrLn h $ f ex)
   unless (null fname) $ hClose h
 
 main :: IO ()
