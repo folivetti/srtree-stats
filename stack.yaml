@@ -49,7 +49,7 @@ extra-deps:
   - git: https://github.com/folivetti/srtree-opt.git
     commit: 5ae020dd368dced9f84d161ccd176f3451af381d
   - git: https://github.com/folivetti/srtree-eqsat.git                                                          
-    commit: 2451beb015d8e08d128b49a71056b27662141295 
+    commit: 3bf26d7b0b7746634959b6ecc3a5485c811d69c9 
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

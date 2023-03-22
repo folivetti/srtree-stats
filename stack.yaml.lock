@@ -41,15 +41,15 @@ packages:
     commit: 5ae020dd368dced9f84d161ccd176f3451af381d
     git: https://github.com/folivetti/srtree-opt.git
 - completed:
-    commit: 2451beb015d8e08d128b49a71056b27662141295
+    commit: 3bf26d7b0b7746634959b6ecc3a5485c811d69c9
     git: https://github.com/folivetti/srtree-eqsat.git
     name: srtree-eqsat
     pantry-tree:
-      sha256: b7ae5b9f53c7674125938cd8ceb7d4cb3f48edc1a6e2d47633c654cea1c634cf
+      sha256: 81a57ed228c3cdda21c1c46065b9f967cd1fe5d9afeafec327fd851f570f4d0e
       size: 736
     version: 0.1.0.0
   original:
-    commit: 2451beb015d8e08d128b49a71056b27662141295
+    commit: 3bf26d7b0b7746634959b6ecc3a5485c811d69c9
     git: https://github.com/folivetti/srtree-eqsat.git
 snapshots:
 - completed:
