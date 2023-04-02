@@ -56,10 +56,10 @@ data Args = Args
       , trainRows   :: Int
       , cols        :: [Int]
       , target      :: Int
+      , test_target :: Int
       , niter       :: Int
       , hasHeader   :: Bool
       , simpl       :: Bool
-      , gz          :: Bool
       , ms2         :: Maybe Double
     } deriving Show
 
@@ -113,7 +113,13 @@ opt = Args
        <> metavar "TARGET"
        <> showDefault
        <> value (-1)
-       <> help "Index of colum to use as the target variable. Default (-1) uses the last column.")
+       <> help "Index of column to use as the target variable. Default (-1) uses the last column.")
+   <*> option auto
+       ( long "test-target"
+       <> metavar "TEST-TARGET"
+       <> showDefault
+       <> value (-1)
+       <> help "Index of column to use as the target variable for the test set. Default (-1) uses the last column.")
    <*> option auto
        ( long "niter"
        <> metavar "NITER"
@@ -126,9 +132,6 @@ opt = Args
     <*> switch
         ( long "simplify"
         <> help "Apply EqSat simplification." )
-    <*> switch
-        ( long "gz"
-        <> help "Gzipped files.")
    <*> option s2Reader
        ( long "s2"
        <> metavar "S2"
@@ -138,7 +141,7 @@ opt = Args
 
 openData :: Args -> IO (((Columns, Column), (Columns, Column)), [(B.ByteString, Int)])
 openData args = first (splitTrainVal (trainRows args)) 
-             <$> loadDataset (dataset args) (cols args) (target args) (hasHeader args) (gz args)
+             <$> loadDataset (dataset args) (cols args) (target args) (hasHeader args)
 
 printResults :: String -> (SRTree Int Double -> String) -> [Either String (SRTree Int Double)] -> IO ()
 printResults fname f exprs = do
@@ -154,7 +157,7 @@ main :: IO ()
 main = do
   args <- execParser opts
   (((xTr, yTr),(xVal, yVal)), headers) <- openData args
-  ((xTe, yTe), _) <- loadDataset (test args) (cols args) (target args) (hasHeader args) (gz args)
+  ((xTe, yTe), _) <- loadDataset (test args) (cols args) (test_target args) (hasHeader args)
   let optimizer     = optimize (niter args) xTr yTr
       varnames      = intercalate "," (map (B.unpack.fst) headers)
       genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
