@@ -73,7 +73,7 @@ logParameters t x y theta = trace (show fisher) $ -(fromIntegral p / 2) * log 3 
                        f''     = deriveBy ix f'
                        fvals'  = evalSRTree theta f'
                        fvals'' = evalSRTree theta f''
-                       f_ii    = LA.toList $ fvals'*fvals' + res*fvals''
+                       f_ii    = LA.toList $ fvals'*fvals' -- + res*fvals''
                    pure $ sum f_ii / s2
 
 evalSRTree :: Column -> SRTree Int Column -> Column
