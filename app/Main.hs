@@ -161,7 +161,7 @@ main = do
   let optimizer     = optimize (niter args) xTr yTr
       varnames      = intercalate "," (map (B.unpack.fst) headers)
       genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
-                          t     = optimizer tree'
+                          t     = if (niter args == 0) then tree' else optimizer tree'
                           n     = countNodes t
                           theta = getTheta t
                           p     = LA.size theta
