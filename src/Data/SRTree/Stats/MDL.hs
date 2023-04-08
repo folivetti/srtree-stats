@@ -8,6 +8,7 @@ import Control.Monad.Reader
 import qualified Numeric.LinearAlgebra as LA
 import Data.SRTree
 import Data.SRTree.Opt
+import Debug.Trace (trace)
 
 type LogFun = SRTree Int Double -> Columns -> Column -> Column -> Double
 
@@ -59,7 +60,7 @@ logFunctionalFreqUniq t _ _ _ = opToNatUniq t + logC t
     logC = sum . map log . getIntConsts
 
 logParameters :: SRTree Int Double -> Columns -> Column -> Column -> Double
-logParameters t x y theta = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
+logParameters t x y theta = trace (show fisher) $ -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
   where
     p         = LA.size theta
     t'        = paramToVar $ varToConst x $ constToParam t
