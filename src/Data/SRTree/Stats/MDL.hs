@@ -34,12 +34,13 @@ mdlFreq :: Maybe Double -> LogFun
 mdlFreq s2 = buildMDL [negLogLikelihood s2, logFunctionalFreq, logParameters]
 
 negLogLikelihood :: Maybe Double -> SRTree Int Double -> Columns -> Column -> Column -> Double
-negLogLikelihood ms2 t x y _ = 0.5*n*log(2*pi*s2) + 0.5*ssr/s2-- 0.5*n*(log(2*pi) + log(ssr/n) + 1)
+negLogLikelihood ms2 t x y theta = 0.5*n*log(2*pi*s2) + 0.5*ssr/s2-- 0.5*n*(log(2*pi) + log(ssr/n) + 1)
   where
-    n   = fromIntegral $ LA.size y
+    m   = fromIntegral $ LA.size y
+    n   = fromIntegral $ LA.size theta
     ssr = sse x y t
     s2 = case ms2 of
-           Nothing -> ssr/n
+           Nothing -> sqrt $ ssr / (m - n)
            Just x  -> x
 
 logFunctionalSimple :: SRTree Int Double -> Columns -> Column -> Column -> Double
@@ -73,8 +74,8 @@ logParameters t x y theta = trace (show fisher) $ -(fromIntegral p / 2) * log 3 
                        f''     = deriveBy ix f'
                        fvals'  = evalSRTree theta f'
                        fvals'' = evalSRTree theta f''
-                       f_ii    = LA.toList $ fvals'*fvals' -- + res*fvals''
-                   pure $ sum f_ii / s2
+                       f_ii    = LA.toList $ fvals'*fvals' + res*fvals''
+                   pure $ sum f_ii -- / s2
 
 evalSRTree :: Column -> SRTree Int Column -> Column
 evalSRTree theta tree = fromJust $ evalTree tree `runReader` (Just . LA.scalar . (theta LA.!))
