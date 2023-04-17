@@ -88,11 +88,15 @@ opt = Args
        ( long "dataset"
        <> short 'd'
        <> metavar "DATASET"
-       <> help "Filename of the dataset used for optimizing the parameters." )
+       <> showDefault
+       <> value ""
+       <> help "Filename of the dataset used for optimizing the parameters. Empty string omits stats that make use of the training data." )
    <*> strOption
        ( long "test"
        <> metavar "TEST"
-       <> help "Filename of the test dataset." )
+       <> showDefault
+       <> value ""
+       <> help "Filename of the test dataset. Empty string omits stats that make use of the training data." )
    <*> option auto
        ( long "rows"
        <> short 'r'
@@ -143,35 +147,53 @@ openData :: Args -> IO (((Columns, Column), (Columns, Column)), [(B.ByteString, 
 openData args = first (splitTrainVal (trainRows args)) 
              <$> loadDataset (dataset args) (cols args) (target args) (hasHeader args)
 
-printResults :: String -> (SRTree Int Double -> String) -> [Either String (SRTree Int Double)] -> IO ()
-printResults fname f exprs = do
+printResults :: String -> String -> (SRTree Int Double -> String) -> [Either String (SRTree Int Double)] -> IO ()
+printResults fname header f exprs = do
   h <- if null fname then pure stdout else openFile fname WriteMode
-  hPutStrLn h "number_nodes,number_params,sse_train,sse_val,sse_test,mse_train,mse_val,mse_test,bic,aic,mdl,mdl_freq"
+  hPutStrLn h header
   forM_ exprs $ \case 
                    Left  err -> hPutStrLn h $ "invalid expression: " <> err
                    Right ex  -> hPutStrLn h $ f ex
                    -- Right ex  -> putStrLn (SRP.showDefault ex) >> (hPutStrLn h $ f ex)
   unless (null fname) $ hClose h
 
+mWhen :: Monoid m => Bool -> m -> m
+mWhen False m = mempty
+mWhen True m = m
+{-# inline mWhen #-}
+
+mUnless :: Monoid m => Bool -> m -> m
+mUnless False m = m
+mUnless True m = mempty
+{-# inline mUnless #-}
+
 main :: IO ()
 main = do
   args <- execParser opts
-  (((xTr, yTr),(xVal, yVal)), headers) <- openData args
-  ((xTe, yTe), _) <- loadDataset (test args) (cols args) (test_target args) (hasHeader args)
-  let optimizer     = optimize (niter args) xTr yTr
-      varnames      = intercalate "," (map (B.unpack.fst) headers)
+  mTrain <- if (null $ dataset args) then pure Nothing else Just <$> openData args
+  mTest <- if (null (dataset args) || null (test args)) then pure Nothing else Just <$> loadDataset (test args) (cols args) (test_target args) (hasHeader args)
+  let Just (((xTr, yTr),(xVal, yVal)), headers) = mTrain
+      Just ((xTe, yTe), _) = mTest
+      optimizer     = optimize (niter args) xTr yTr
+      varnames      = mUnless (null $ dataset args) $ intercalate "," (map (B.unpack.fst) headers)
+      header_csv = "number_nodes,number_params" 
+                 <> mUnless (null $ dataset args) ",sse_train,sse_val,mse_train,mse_val,bic,aic,mdl,mdl_freq" 
+                 <> mUnless (null (dataset args) || null (test args)) ",sse_test,mse_test"
       genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
-                          t     = if (niter args == 0) then tree' else optimizer tree'
-                          n     = countNodes t
+                          t     = if niter args == 0 || null (dataset args) then tree' else optimizer tree'
                           theta = getTheta t
-                          p     = LA.size theta
                           s2    = ms2 args
-                          sses  = map show [sse xTr yTr t, sse xVal yVal t, sse xTe yTe t]
-                          mses  = map show [mse xTr yTr t, mse xVal yVal t, mse xTe yTe t]
-                          cmplx = map show [bic s2 t xTr yTr theta, aic s2 t xTr yTr theta, mdl s2 t xTr yTr theta, mdlFreq s2 t xTr yTr theta]
-                        in intercalate "," $ [show n, show p] <> sses <> mses <> cmplx
+                          stats = [fromIntegral . countNodes, fromIntegral . const (LA.size theta)]
+                                <> mUnless (null $ dataset args) 
+                                       [sse xTr yTr, sse xVal yVal, mse xTr yTr
+                                       , mse xVal yVal, bic s2 xTr yTr theta
+                                       , aic s2 xTr yTr theta, mdl s2 xTr yTr theta
+                                       , mdlFreq s2 xTr yTr theta]
+                                <> mUnless (null (dataset args) || null (test args)) 
+                                       [sse xTe yTe, mse xTe yTe]
+                        in intercalate "," $ map (show . ($ t)) stats
   withInput (infile args) (from args) varnames False False
-    >>= printResults (outfile args) genStats
+    >>= printResults (outfile args) header_csv genStats
   
   where 
       opts = info (opt <**> helper)

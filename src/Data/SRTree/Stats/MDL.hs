@@ -10,22 +10,22 @@ import Data.SRTree
 import Data.SRTree.Opt
 import Debug.Trace (trace)
 
-type LogFun = SRTree Int Double -> Columns -> Column -> Column -> Double
+type LogFun = Columns -> Column -> Column -> SRTree Int Double -> Double
 
 bic :: Maybe Double -> LogFun
-bic s2 t x y theta = p * log n + 2 * negLogLikelihood s2 t x y theta
+bic s2 x y theta t = p * log n + 2 * negLogLikelihood s2 x y theta t
   where
     p = fromIntegral $ LA.size theta
     n = fromIntegral $ LA.size y
 
 aic :: Maybe Double -> LogFun
-aic s2 t x y theta = 2 * p + 2 * negLogLikelihood s2 t x y theta
+aic s2 x y theta t = 2 * p + 2 * negLogLikelihood s2 x y theta t
   where
     p = fromIntegral $ LA.size theta
     n   = fromIntegral $ LA.size y
 
 buildMDL :: [LogFun] -> LogFun
-buildMDL fs t x y theta = foldr (\f acc -> acc + f t x y theta) 0 fs
+buildMDL fs x y theta t = foldr (\f acc -> acc + f x y theta t) 0 fs
 
 mdl :: Maybe Double -> LogFun
 mdl s2 = buildMDL [negLogLikelihood s2, logFunctionalSimple, logParameters]
@@ -33,8 +33,8 @@ mdl s2 = buildMDL [negLogLikelihood s2, logFunctionalSimple, logParameters]
 mdlFreq :: Maybe Double -> LogFun
 mdlFreq s2 = buildMDL [negLogLikelihood s2, logFunctionalFreq, logParameters]
 
-negLogLikelihood :: Maybe Double -> SRTree Int Double -> Columns -> Column -> Column -> Double
-negLogLikelihood ms2 t x y theta = 0.5*n*log(2*pi*s2) + 0.5*ssr/s2-- 0.5*n*(log(2*pi) + log(ssr/n) + 1)
+negLogLikelihood :: Maybe Double -> LogFun
+negLogLikelihood ms2 x y theta t = 0.5*n*log(2*pi*s2) + 0.5*ssr/s2-- 0.5*n*(log(2*pi) + log(ssr/n) + 1)
   where
     m   = fromIntegral $ LA.size y
     n   = fromIntegral $ LA.size theta
@@ -43,25 +43,25 @@ negLogLikelihood ms2 t x y theta = 0.5*n*log(2*pi*s2) + 0.5*ssr/s2-- 0.5*n*(log(
            Nothing -> sqrt $ ssr / (m - n)
            Just x  -> x
 
-logFunctionalSimple :: SRTree Int Double -> Columns -> Column -> Column -> Double
-logFunctionalSimple t _ _ _ = countNodes' t * log (countUniqueTokens' t) + logC t
+logFunctionalSimple :: LogFun
+logFunctionalSimple _ _ _ t = countNodes' t * log (countUniqueTokens' t) + logC t
   where
     countNodes'        = fromIntegral . countNodes
     countUniqueTokens' = fromIntegral . countUniqueTokens
     logC               = sum . map log . getIntConsts
 
-logFunctionalFreq  :: SRTree Int Double -> Columns -> Column -> Column -> Double
-logFunctionalFreq t _ _ _ = opToNat t + logC t
+logFunctionalFreq  :: LogFun
+logFunctionalFreq _ _ _ t = opToNat t + logC t
   where
     logC = sum . map log . getIntConsts
 
-logFunctionalFreqUniq  :: SRTree Int Double -> Columns -> Column -> Column -> Double
-logFunctionalFreqUniq t _ _ _ = opToNatUniq t + logC t
+logFunctionalFreqUniq  :: LogFun
+logFunctionalFreqUniq _ _ _ t = opToNatUniq t + logC t
   where
     logC = sum . map log . getIntConsts
 
-logParameters :: SRTree Int Double -> Columns -> Column -> Column -> Double
-logParameters t x y theta = trace (show fisher) $ -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
+logParameters :: LogFun
+logParameters x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
   where
     p         = LA.size theta
     t'        = paramToVar $ varToConst x $ constToParam t
