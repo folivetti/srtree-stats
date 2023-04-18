@@ -60,7 +60,7 @@ data Args = Args
       , niter       :: Int
       , hasHeader   :: Bool
       , simpl       :: Bool
-      , ms2         :: Maybe Double
+      , msErr       :: Maybe Double
     } deriving Show
 
 opt :: Parser Args
@@ -137,11 +137,11 @@ opt = Args
         ( long "simplify"
         <> help "Apply EqSat simplification." )
    <*> option s2Reader
-       ( long "s2"
-       <> metavar "S2"
+       ( long "sErr"
+       <> metavar "Serr"
        <> showDefault
        <> value Nothing
-       <> help "Estimated s^2 of the data. If not passed, it uses the model MSE.")
+       <> help "Estimated standard error of the data. If not passed, it uses the model MSE.")
 
 openData :: Args -> IO (((Columns, Column), (Columns, Column)), [(B.ByteString, Int)])
 openData args = first (splitTrainVal (trainRows args)) 
@@ -182,13 +182,13 @@ main = do
       genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
                           t     = if niter args == 0 || null (dataset args) then tree' else optimizer tree'
                           theta = getTheta t
-                          s2    = ms2 args
+                          sErr  = msErr args
                           stats = [fromIntegral . countNodes, fromIntegral . const (LA.size theta)]
                                 <> mUnless (null $ dataset args) 
                                        [sse xTr yTr, sse xVal yVal, mse xTr yTr
-                                       , mse xVal yVal, bic s2 xTr yTr theta
-                                       , aic s2 xTr yTr theta, mdl s2 xTr yTr theta
-                                       , mdlFreq s2 xTr yTr theta]
+                                       , mse xVal yVal, bic sErr xTr yTr theta
+                                       , aic sErr xTr yTr theta, mdl sErr xTr yTr theta
+                                       , mdlFreq sErr xTr yTr theta]
                                 <> mUnless (null (dataset args) || null (test args)) 
                                        [sse xTe yTe, mse xTe yTe]
                         in intercalate "," $ map (show . ($ t)) stats
