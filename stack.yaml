@@ -48,8 +48,10 @@ extra-deps:
   - hegg-0.3.0.0
   - git: https://github.com/folivetti/srtree-opt.git
     commit: c6c0bf360cea897b71577a2fd9bf3d169883bc68
-  - git: https://github.com/folivetti/srtree-eqsat.git                                                          
+  - git: https://github.com/folivetti/srtree-eqsat.git
     commit: 3bf26d7b0b7746634959b6ecc3a5485c811d69c9 
+  - git: https://github.com/folivetti/srtree-datasets.git
+    commit: a0c09b3c339471b086518c774dee4a00be37649b 
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

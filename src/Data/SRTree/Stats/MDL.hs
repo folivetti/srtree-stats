@@ -28,13 +28,13 @@ buildMDL :: [LogFun] -> LogFun
 buildMDL fs x y theta t = foldr (\f acc -> acc + f x y theta t) 0 fs
 
 mdl :: Maybe Double -> LogFun
-mdl sErr = buildMDL [negLogLikelihood sErr, logFunctionalSimple, logParameters]
+mdl sErr = buildMDL [negLogLikelihood sErr, logFunctionalSimple, logParameters sErr]
 
 mdlFreq :: Maybe Double -> LogFun
-mdlFreq sErr = buildMDL [negLogLikelihood sErr, logFunctionalFreq, logParameters]
+mdlFreq sErr = buildMDL [negLogLikelihood sErr, logFunctionalFreq, logParameters sErr]
 
 negLogLikelihood :: Maybe Double -> LogFun
-negLogLikelihood msErr x y theta t = 0.5*ssr/(sErr*sErr) + 0.5*n*log(2*pi*sErr*sErr) -- +  -- 0.5*n*(log(2*pi) + log(ssr/n) + 1)
+negLogLikelihood msErr x y theta t = 0.5*ssr/(sErr*sErr) + 0.5*m*log(2*pi*sErr*sErr)
   where
     m   = fromIntegral $ LA.size y
     n   = fromIntegral $ LA.size theta
@@ -44,38 +44,48 @@ negLogLikelihood msErr x y theta t = 0.5*ssr/(sErr*sErr) + 0.5*n*log(2*pi*sErr*s
            Just x  -> x
 
 logFunctionalSimple :: LogFun
-logFunctionalSimple _ _ _ t = countNodes' t * log (countUniqueTokens' t) + logC t
+logFunctionalSimple _ _ theta t = (countNodes' t) * log (countUniqueTokens' t) + logC + (fromIntegral $ length consts) * log(2)
   where
     countNodes'        = fromIntegral . countNodes
     countUniqueTokens' = fromIntegral . countUniqueTokens
-    logC               = sum . map (log . abs) . getIntConsts
+    consts             = getIntConsts t
+    logC               = sum . map (log . abs) $ consts
+    signs = sum [1 | a <- getIntConsts t, a < 0] -- + sum [1 | a <- LA.toList theta, a < 0]
 
 logFunctionalFreq  :: LogFun
-logFunctionalFreq _ _ _ t = opToNat t + logC t
+logFunctionalFreq _ _ _ t = opToNat t + length' vars * (log (length' $ nub vars)) + logC + (fromIntegral $ length consts) * log(2)
   where
-    logC = sum . map (log . abs) . getIntConsts
+    consts             = getIntConsts t
+    logC               = sum . map (log . abs) $ consts
+    length' = fromIntegral . length
+    vars = filter isVar $ getOps t
+    isVar (VarOp _) = True
+    isVar _         = False
 
 logFunctionalFreqUniq  :: LogFun
 logFunctionalFreqUniq _ _ _ t = opToNatUniq t + logC t
   where
     logC = sum . map (log . abs) . getIntConsts
 
-logParameters :: LogFun
-logParameters x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
+logParameters :: Maybe Double -> LogFun
+logParameters msErr x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
   where
     p         = LA.size theta
     t'        = paramToVar $ varToConst x $ constToParam t
     res       = y - evalSRTree theta t'
     logTheta  = LA.toList . log . abs $ theta
-    logFisher = map ( (* 0.5) . log . (/ sErr)) fisher
-    sErr      = mse x y t
+    logFisher = map ((* 0.5) . log) fisher
+    ssr = sse x y t
+    sErr = case msErr of
+           Nothing -> sqrt $ ssr / fromIntegral (LA.size y - p)
+           Just x  -> x
     fisher    = do ix <- [0 .. p-1]
                    let f'      = deriveBy ix t'
                        f''     = deriveBy ix f'
                        fvals'  = evalSRTree theta f'
                        fvals'' = evalSRTree theta f''
-                       f_ii    = LA.toList $ fvals'*fvals' -- + res*fvals''
-                   pure $ sum f_ii
+                       f_ii    = LA.toList $ fvals' ^ 2 - res*fvals''
+                   pure $ sum f_ii / (sErr ^ 2)
 
 evalSRTree :: Column -> SRTree Int Column -> Column
 evalSRTree theta tree = fromJust $ evalTree tree `runReader` (Just . LA.scalar . (theta LA.!))
@@ -128,6 +138,8 @@ getFuns _             = []
 
 opToNat :: SRTree ix val -> Double
 opToNat (Var _)       = 0.6610799229372109
+opToNat (Param _)     = 0.6610799229372109
+opToNat (Const _)     = 0.6610799229372109
 opToNat (Mul l r)     = 1.720356134912558 + opToNat l + opToNat r
 opToNat (Div l r)     = 2.60436883851265 + opToNat l + opToNat r
 opToNat (Add l r)     = 2.500842464597881 + opToNat l + opToNat r

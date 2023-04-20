@@ -9,8 +9,9 @@ import Data.Char (toLower, toUpper)
 import Data.List (intercalate)
 import Data.SRTree (SRTree, countNodes)
 import Data.SRTree.EqSat (simplifyEqSat)
-import Data.SRTree.Opt
+import Data.SRTree.Opt hiding (loadDataset)
 import Data.SRTree.Stats.MDL (aic, bic, mdl, mdlFreq)
+import Data.SRTree.Datasets (loadDataset)
 import Numeric.LinearAlgebra qualified as LA
 import Options.Applicative
 import System.IO (IOMode (WriteMode), hClose, hPutStrLn, openFile, stdout)
@@ -53,10 +54,6 @@ data Args = Args
       , outfile     :: String
       , dataset     :: String
       , test        :: String
-      , trainRows   :: Int
-      , cols        :: [Int]
-      , target      :: Int
-      , test_target :: Int
       , niter       :: Int
       , hasHeader   :: Bool
       , simpl       :: Bool
@@ -85,45 +82,17 @@ opt = Args
        <> value ""
        <> help "Output file to store stats for each expression. Empty string prints expressions to stdout." )
    <*> strOption
-       ( long "dataset"
-       <> short 'd'
+       ( long "training"
        <> metavar "DATASET"
        <> showDefault
        <> value ""
-       <> help "Filename of the dataset used for optimizing the parameters. Empty string omits stats that make use of the training data." )
+       <> help "Filename of the dataset used for optimizing the parameters. Empty string omits stats that make use of the training data. It will auto-detect and handle gzipped file based on gz extension. It will also auto-detect the delimiter. \nThe filename can include extra information: filename.csv:start:end:target:vars where start and end corresponds to the range of rows that should be used for fitting, target is the column index (or name) of the target variable and cols is a comma separated list of column indeces or names of the variables in the same order as used by the symbolic model." )
    <*> strOption
        ( long "test"
        <> metavar "TEST"
        <> showDefault
        <> value ""
-       <> help "Filename of the test dataset. Empty string omits stats that make use of the training data." )
-   <*> option auto
-       ( long "rows"
-       <> short 'r'
-       <> metavar "ROWS"
-       <> showDefault
-       <> value 0
-       <> help "Number of rows to use as training data, the remainder will be used as validation. Values <= 0 will use the whole data as training and validation.")
-   <*> option columnsReader
-       ( long "columns"
-       <> short 'c'
-       <> metavar "COLUMNS"
-       <> showDefault
-       <> value []
-       <> help "Index of columns to use as variables. Default \"\" uses all but the last column.")
-   <*> option auto
-       ( long "target"
-       <> short 't'
-       <> metavar "TARGET"
-       <> showDefault
-       <> value (-1)
-       <> help "Index of column to use as the target variable. Default (-1) uses the last column.")
-   <*> option auto
-       ( long "test-target"
-       <> metavar "TEST-TARGET"
-       <> showDefault
-       <> value (-1)
-       <> help "Index of column to use as the target variable for the test set. Default (-1) uses the last column.")
+       <> help "Filename of the test dataset. Empty string omits stats that make use of the training data. It can have additional information as in the training set, but the validation range will be discarded." )
    <*> option auto
        ( long "niter"
        <> metavar "NITER"
@@ -142,10 +111,6 @@ opt = Args
        <> showDefault
        <> value Nothing
        <> help "Estimated standard error of the data. If not passed, it uses the model MSE.")
-
-openData :: Args -> IO (((Columns, Column), (Columns, Column)), [(B.ByteString, Int)])
-openData args = first (splitTrainVal (trainRows args)) 
-             <$> loadDataset (dataset args) (cols args) (target args) (hasHeader args)
 
 printResults :: String -> String -> (SRTree Int Double -> String) -> [Either String (SRTree Int Double)] -> IO ()
 printResults fname header f exprs = do
@@ -170,12 +135,16 @@ mUnless True m = mempty
 main :: IO ()
 main = do
   args <- execParser opts
-  mTrain <- if (null $ dataset args) then pure Nothing else Just <$> openData args
-  mTest <- if (null (dataset args) || null (test args)) then pure Nothing else Just <$> loadDataset (test args) (cols args) (test_target args) (hasHeader args)
-  let Just (((xTr, yTr),(xVal, yVal)), headers) = mTrain
-      Just ((xTe, yTe), _) = mTest
+  mTrain <- if null (dataset args) 
+               then pure Nothing 
+               else Just <$> loadDataset (dataset args) (hasHeader args)
+  mTest <- if null (dataset args) || null (test args) 
+              then pure Nothing 
+              else Just <$> loadDataset (test args) (hasHeader args)
+  let Just ((xTr, yTr, xVal, yVal), headers) = mTrain
+      Just ((xTe, yTe, _, _), _) = mTest
       optimizer     = optimize (niter args) xTr yTr
-      varnames      = mUnless (null $ dataset args) $ intercalate "," (map (B.unpack.fst) headers)
+      varnames      = mUnless (null $ dataset args) headers
       header_csv = "number_nodes,number_params" 
                  <> mUnless (null $ dataset args) ",sse_train,sse_val,mse_train,mse_val,bic,aic,mdl,mdl_freq" 
                  <> mUnless (null (dataset args) || null (test args)) ",sse_test,mse_test"
