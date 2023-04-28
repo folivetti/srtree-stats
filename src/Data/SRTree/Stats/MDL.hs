@@ -44,17 +44,19 @@ negLogLikelihood msErr x y theta t = 0.5*ssr/(sErr*sErr) + 0.5*m*log(2*pi*sErr*s
            Just x  -> x
 
 logFunctionalSimple :: LogFun
-logFunctionalSimple _ _ theta t = (countNodes' t) * log (countUniqueTokens' t) + logC + (fromIntegral $ length consts) * log(2)
+logFunctionalSimple _ _ theta t = (countNodes' t) * log (countUniqueTokens' t') + logC + (fromIntegral $ length consts) * log(2)
   where
+    t'                 = constToParam t
     countNodes'        = fromIntegral . countNodes
-    countUniqueTokens' = fromIntegral . countUniqueTokens
+    countUniqueTokens' = fromIntegral . length . nub . getOps
     consts             = getIntConsts t
     logC               = sum . map (log . abs) $ consts
     signs = sum [1 | a <- getIntConsts t, a < 0] -- + sum [1 | a <- LA.toList theta, a < 0]
 
 logFunctionalFreq  :: LogFun
-logFunctionalFreq _ _ _ t = opToNat t + length' vars * (log (length' $ nub vars)) + logC + (fromIntegral $ length consts) * log(2)
+logFunctionalFreq _ _ _ t = opToNat t' + logC + length' vars * (log (length' $ nub vars)) -- + (length' consts) * log(2)
   where
+    t'                 = constToParam t
     consts             = getIntConsts t
     logC               = sum . map (log . abs) $ consts
     length' = fromIntegral . length
@@ -90,10 +92,10 @@ logParameters msErr x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher 
 evalSRTree :: Column -> SRTree Int Column -> Column
 evalSRTree theta tree = fromJust $ evalTree tree `runReader` (Just . LA.scalar . (theta LA.!))
 
-data Op = PowOp | AddOp | SubOp | MulOp | DivOp | PowerOp | LogOp | VarOp Int | ConstOp | ParamOp
+data Op = PowOp | AddOp | SubOp | MulOp | DivOp | PowerOp | LogOp | VarOp Int | ConstOp | ParamOp | FunOp Function
     deriving (Show, Eq, Ord)
 
-countUniqueTokens :: SRTree Int Double -> Int
+countUniqueTokens :: SRTree Int a -> Int
 countUniqueTokens t = countFuns t + countOp t
   where
       countFuns = length . nub . getFuns
@@ -112,7 +114,7 @@ getIntConsts (LogBase l r) = getIntConsts l <> getIntConsts r
 getIntConsts _             = []
 
 getOps :: SRTree Int val -> [Op]
-getOps (Fun _ node)  = getOps node
+getOps (Fun f node)  = FunOp f : getOps node
 getOps (Pow node _)  = PowOp : getOps node
 getOps (Add l r)     = AddOp : (getOps l <> getOps r)
 getOps (Sub l r)     = SubOp : (getOps l <> getOps r)
@@ -145,7 +147,7 @@ opToNat (Div l r)     = 2.60436883851265 + opToNat l + opToNat r
 opToNat (Add l r)     = 2.500842464597881 + opToNat l + opToNat r
 opToNat (Sub l r)     = 2.500842464597881 + opToNat l + opToNat r
 opToNat (Power l r)   = 2.527957363394847 + opToNat l + opToNat r
-opToNat (Pow l _)     = 2.527957363394847 + opToNat l
+opToNat (Pow l _)     = 2.527957363394847 + opToNat l + 0.6610799229372109
 opToNat (LogBase l r) = 4.765599813200964 + opToNat l + opToNat r
 opToNat (Fun f l)     = funToNat f + opToNat l
 opToNat _             = 0
