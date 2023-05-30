@@ -10,7 +10,7 @@ import Data.List (intercalate)
 import Data.SRTree (SRTree, countNodes)
 import Data.SRTree.EqSat (simplifyEqSat)
 import Data.SRTree.Opt hiding (loadDataset)
-import Data.SRTree.Stats.MDL (aic, bic, mdl, mdlFreq)
+import Data.SRTree.Stats.MDL (aic, bic, mdl, mdlFreq, replaceZeroTheta)
 import Data.SRTree.Datasets (loadDataset)
 import Numeric.LinearAlgebra qualified as LA
 import Options.Applicative
@@ -149,7 +149,8 @@ main = do
                  <> mUnless (null $ dataset args) ",sse_train,sse_val,mse_train,mse_val,bic,aic,mdl,mdl_freq" 
                  <> mUnless (null (dataset args) || null (test args)) ",sse_test,mse_test"
       genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
-                          t     = if niter args == 0 || null (dataset args) then tree' else optimizer tree'
+                          t'    = if niter args == 0 || null (dataset args) then tree' else optimizer tree'
+                          t     = if null (dataset args) then t' else replaceZeroTheta sErr xTr yTr (getTheta t') t'
                           theta = getTheta t
                           sErr  = msErr args
                           stats = [fromIntegral . countNodes, fromIntegral . const (LA.size theta)]

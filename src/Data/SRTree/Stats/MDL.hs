@@ -1,5 +1,5 @@
 {-# language FlexibleInstances #-}
-module Data.SRTree.Stats.MDL ( aic, bic, mdl, mdlFreq )
+module Data.SRTree.Stats.MDL ( aic, bic, mdl, mdlFreq, replaceZeroTheta )
     where
 
 import Data.List ( nub )
@@ -9,6 +9,7 @@ import qualified Numeric.LinearAlgebra as LA
 import Data.SRTree
 import Data.SRTree.Opt
 import Debug.Trace (trace)
+import Control.Monad.State
 
 type LogFun = Columns -> Column -> Column -> SRTree Int Double -> Double
 
@@ -73,21 +74,26 @@ logParameters :: Maybe Double -> LogFun
 logParameters msErr x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
   where
     p         = LA.size theta
-    t'        = paramToVar $ varToConst x $ constToParam t
-    res       = y - evalSRTree theta t'
     logTheta  = LA.toList . log . abs $ theta
-    logFisher = map ((* 0.5) . log) fisher
-    ssr = sse x y t
+    logFisher = map ((* 0.5) . log) $ fisherInfo msErr x y theta t
+
+fisherInfo :: Maybe Double -> Columns -> Column -> Column -> SRTree Int Double -> [Double]
+fisherInfo msErr x y theta t = do 
+  ix <- [0 .. p-1]
+  let f'      = deriveBy ix t'
+      f''     = deriveBy ix f'
+      fvals'  = evalSRTree theta f'
+      fvals'' = evalSRTree theta f''
+      f_ii    = LA.toList $ fvals' ^ 2 - res*fvals''
+  pure $ sum f_ii / (sErr ^ 2)
+  where
+    p    = LA.size theta
+    t'   = paramToVar $ varToConst x $ constToParam t
+    res  = y - evalSRTree theta t'
+    ssr  = sse x y t
     sErr = case msErr of
            Nothing -> sqrt $ ssr / fromIntegral (LA.size y - p)
            Just x  -> x
-    fisher    = do ix <- [0 .. p-1]
-                   let f'      = deriveBy ix t'
-                       f''     = deriveBy ix f'
-                       fvals'  = evalSRTree theta f'
-                       fvals'' = evalSRTree theta f''
-                       f_ii    = LA.toList $ fvals' ^ 2 - res*fvals''
-                   pure $ sum f_ii / (sErr ^ 2)
 
 evalSRTree :: Column -> SRTree Int Column -> Column
 evalSRTree theta tree = fromJust $ evalTree tree `runReader` (Just . LA.scalar . (theta LA.!))
@@ -191,3 +197,28 @@ funToNatUniq Tanh = 7.584264818389059
 funToNatUniq Tan  = 7.9897299264972235
 funToNatUniq _    = 7.9897299264972235
 --funToNatUniq Factorial = 7.584264818389059
+
+replaceZeroTheta :: Maybe Double -> Columns -> Column -> Column -> SRTree Int Double -> SRTree Int Double
+replaceZeroTheta msErr x y theta t = trace (show fisher) $ simplify t''
+  where
+    fisher = fisherInfo msErr x y theta t
+    t'     = constToParam t
+    theta' = LA.toList theta
+    t'' = go t' `evalState` (zip theta' fisher)
+
+    go :: SRTree Int Double -> State [(Double, Double)] (SRTree Int Double)
+    go Empty         = pure Empty
+    go (Var ix)      = pure $ Var ix
+    go (Param _)     = do (v, f) <- gets head
+                          modify tail
+                          let v' = if abs (v / sqrt(12 / f) ) < 1 then 0 else v
+                          pure $ Const v'
+    go (Const v)     = pure $ Const v
+    go (Fun f t)     = Fun f <$> go t
+    go (Pow t i)     = (`Pow` i) <$> go t
+    go (Add l r)     = do { l' <- go l; r' <- go r; pure $ Add l' r' }
+    go (Sub l r)     = do { l' <- go l; r' <- go r; pure $ Sub l' r' }
+    go (Mul l r)     = do { l' <- go l; r' <- go r; pure $ Mul l' r' }
+    go (Div l r)     = do { l' <- go l; r' <- go r; pure $ Div l' r' }
+    go (Power l r)   = do { l' <- go l; r' <- go r; pure $ Power l' r' }
+    go (LogBase l r) = do { l' <- go l; r' <- go r; pure $ LogBase l' r' }
