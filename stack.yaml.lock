@@ -5,22 +5,22 @@
 
 packages:
 - completed:
-    hackage: srtree-0.1.2.1@sha256:b314b7675d65b85b300012ce2f3f170d254b17afa6d8f62a456b35837f8db426,1639
+    hackage: srtree-1.0.0.4@sha256:66c147119adf022d0ae8dc59ffb0582595836152a96124838da16411a45559cb,1742
     pantry-tree:
-      sha256: e7e298591cc7e72bbc628ce1e97c9d83b4c48f708ba56aa8ea7fa83e70fb0b87
-      size: 562
+      sha256: 5c8df2908e2ce8bc3f9a5659444d8b137455ceee81a24e38da3d3427a207f98c
+      size: 632
   original:
-    hackage: srtree-0.1.2.1
+    hackage: srtree-1.0.0.4
 - completed:
-    commit: 9862af0396aaea5fa6b0685fb74032d7d52405ce
+    commit: 73220e2765619bc54dcf10c7d1a5547b0aab0afc
     git: https://github.com/folivetti/pandoc-symreg.git
     name: pandoc-symreg
     pantry-tree:
-      sha256: 41228c09df3d00d39fcb6a02424866dc1a038010a4312d0ed85d8a7e7285458d
-      size: 2062
-    version: 0.1.1.0
+      sha256: 7bf0fdb2d9324c0ae7b17dd1b9a9e5aaa275a6bdc37a0d8df56228e8d382f06c
+      size: 2399
+    version: 0.2.1.2
   original:
-    commit: 9862af0396aaea5fa6b0685fb74032d7d52405ce
+    commit: 73220e2765619bc54dcf10c7d1a5547b0aab0afc
     git: https://github.com/folivetti/pandoc-symreg.git
 - completed:
     hackage: hegg-0.3.0.0@sha256:913a91c7326a767626d6bc949ea38af857cc6dee22b3e49270f7342e2b2bf762,5718
@@ -30,27 +30,16 @@ packages:
   original:
     hackage: hegg-0.3.0.0
 - completed:
-    commit: c6c0bf360cea897b71577a2fd9bf3d169883bc68
+    commit: df7f5e8f5f06edd1a0eab37b87deb6ba966888ef
     git: https://github.com/folivetti/srtree-opt.git
     name: srtree-opt
     pantry-tree:
-      sha256: 41086828310f9f401dd5ab7abfd8172b8896355befda64f354820a1ce0213bbb
-      size: 1017
+      sha256: e9b469a74f68a442c980b1aa5631590cfe7254642695e9528da20b1572811f08
+      size: 1247
     version: 0.1.0.0
   original:
-    commit: c6c0bf360cea897b71577a2fd9bf3d169883bc68
+    commit: df7f5e8f5f06edd1a0eab37b87deb6ba966888ef
     git: https://github.com/folivetti/srtree-opt.git
-- completed:
-    commit: 3bf26d7b0b7746634959b6ecc3a5485c811d69c9
-    git: https://github.com/folivetti/srtree-eqsat.git
-    name: srtree-eqsat
-    pantry-tree:
-      sha256: 81a57ed228c3cdda21c1c46065b9f967cd1fe5d9afeafec327fd851f570f4d0e
-      size: 736
-    version: 0.1.0.0
-  original:
-    commit: 3bf26d7b0b7746634959b6ecc3a5485c811d69c9
-    git: https://github.com/folivetti/srtree-eqsat.git
 - completed:
     commit: a0c09b3c339471b086518c774dee4a00be37649b
     git: https://github.com/folivetti/srtree-datasets.git
@@ -64,8 +53,7 @@ packages:
     git: https://github.com/folivetti/srtree-datasets.git
 snapshots:
 - completed:
-    sha256: adbc602422dde10cc330175da7de8609e70afc41449a7e2d6e8b1827aa0e5008
-    size: 649342
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/20/11.yaml
-  original:
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/20/11.yaml
+    sha256: 5a59b2a405b3aba3c00188453be172b85893cab8ebc352b1ef58b0eae5d248a2
+    size: 650475
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/20/26.yaml
+  original: lts-20.26

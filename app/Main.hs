@@ -7,12 +7,13 @@ import Data.Bifunctor (first)
 import Data.ByteString.Char8 qualified as B
 import Data.Char (toLower, toUpper)
 import Data.List (intercalate)
-import Data.SRTree (SRTree, countNodes)
+import Data.SRTree (SRTree, Fix, countNodes, floatConstsToParam)
 import Data.SRTree.EqSat (simplifyEqSat)
 import Data.SRTree.Opt hiding (loadDataset)
-import Data.SRTree.Stats.MDL (aic, bic, mdl, mdlFreq, replaceZeroTheta)
+import Data.SRTree.Stats.MDL (aic, bic, mdl, mdlFreq, cl, cc, cp, replaceZeroTheta)
 import Data.SRTree.Datasets (loadDataset)
 import Numeric.LinearAlgebra qualified as LA
+import Data.Vector qualified as V
 import Options.Applicative
 import System.IO (IOMode (WriteMode), hClose, hPutStrLn, openFile, stdout)
 import Text.ParseSR (SRAlgs (..))
@@ -112,7 +113,7 @@ opt = Args
        <> value Nothing
        <> help "Estimated standard error of the data. If not passed, it uses the model MSE.")
 
-printResults :: String -> String -> (SRTree Int Double -> String) -> [Either String (SRTree Int Double)] -> IO ()
+printResults :: String -> String -> (Fix SRTree -> String) -> [Either String (Fix SRTree)] -> IO ()
 printResults fname header f exprs = do
   h <- if null fname then pure stdout else openFile fname WriteMode
   hPutStrLn h header
@@ -143,26 +144,35 @@ main = do
               else Just <$> loadDataset (test args) (hasHeader args)
   let Just ((xTr, yTr, xVal, yVal), headers) = mTrain
       Just ((xTe, yTe, _, _), _) = mTest
-      optimizer     = optimize (niter args) xTr yTr
+      optimizer     = optimize (Just Gaussian) (msErr args) (niter args) xTr yTr
       varnames      = mUnless (null $ dataset args) headers
       header_csv = "number_nodes,number_params" 
-                 <> mUnless (null $ dataset args) ",sse_train,sse_val,mse_train,mse_val,bic,aic,mdl,mdl_freq" 
+                 <> mUnless (null $ dataset args) ",sse_train,sse_val,mse_train,mse_val,bic,aic,mdl,mdl_freq,cl,cc,cp" 
                  <> mUnless (null (dataset args) || null (test args)) ",sse_test,mse_test"
-      genStats tree = let tree' = if simpl args then simplifyEqSat tree else tree
-                          t'    = if niter args == 0 || null (dataset args) then tree' else optimizer tree'
-                          t     = if null (dataset args) then t' else replaceZeroTheta sErr xTr yTr (getTheta t') t'
-                          theta = getTheta t
+      genStats tree = let t' = if null (dataset args) 
+                                then tree
+                                else if niter args == 0
+                                       then tree -- replaceZeroTheta sErr xTr yTr tree
+                                       else (fst $ optimizer tree) -- replaceZeroTheta sErr xTr yTr (fst $ optimizer tree)
+                          (t, theta') = floatConstsToParam t'
+                          theta = V.fromList theta'
                           sErr  = msErr args
-                          stats = [fromIntegral . countNodes, fromIntegral . const (LA.size theta)]
+                          sse' x y t = sse x y t theta
+                          mse' x y t = mse x y t theta
+                          stats = [fromIntegral . countNodes, fromIntegral . const (V.length theta)]
                                 <> mUnless (null $ dataset args) 
-                                       [sse xTr yTr, sse xVal yVal, mse xTr yTr
-                                       , mse xVal yVal, bic sErr xTr yTr theta
-                                       , aic sErr xTr yTr theta, mdl sErr xTr yTr theta
-                                       , mdlFreq sErr xTr yTr theta]
+                                       [ sse' xTr yTr, sse' xVal yVal
+                                       , mse' xTr yTr , mse' xVal yVal
+                                       , bic sErr xTr yTr theta , aic sErr xTr yTr theta
+                                       , mdl sErr xTr yTr theta , mdlFreq sErr xTr yTr theta
+                                       , cl sErr xTr yTr theta
+                                       , cc sErr xTr yTr theta
+                                       , cp sErr xTr yTr theta
+                                       ]
                                 <> mUnless (null (dataset args) || null (test args)) 
-                                       [sse xTe yTe, mse xTe yTe]
-                        in intercalate "," $ map (show . ($ t)) stats
-  withInput (infile args) (from args) varnames False False
+                                       [sse' xTe yTe, mse' xTe yTe]
+                        in intercalate "," $ map (show . ($ t')) stats
+  withInput (infile args) (from args) varnames False (simpl args)
     >>= printResults (outfile args) header_csv genStats
   
   where 

@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.1.
+-- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
 
@@ -38,12 +38,11 @@ library
     , hmatrix-gsl
     , hmatrix-morpheus
     , mtl ==2.2.*
-    , optparse-applicative ==0.17.*
-    , pandoc-symreg >=0.1.0.1
+    , optparse-applicative >=0.17 && <0.19
+    , pandoc-symreg ==0.2.1.2
     , split
-    , srtree <=0.1.2.1
+    , srtree <=1.0.0.4
     , srtree-datasets
-    , srtree-eqsat
     , srtree-opt
     , vector
     , zlib
@@ -63,12 +62,11 @@ executable srtree-stats
     , hmatrix-gsl
     , hmatrix-morpheus
     , mtl ==2.2.*
-    , optparse-applicative ==0.17.*
-    , pandoc-symreg >=0.1.0.1
+    , optparse-applicative >=0.17 && <0.19
+    , pandoc-symreg ==0.2.1.2
     , split
-    , srtree <=0.1.2.1
+    , srtree <=1.0.0.4
     , srtree-datasets
-    , srtree-eqsat
     , srtree-opt
     , srtree-stats
     , vector
@@ -90,12 +88,11 @@ test-suite srtree-stats-test
     , hmatrix-gsl
     , hmatrix-morpheus
     , mtl ==2.2.*
-    , optparse-applicative ==0.17.*
-    , pandoc-symreg >=0.1.0.1
+    , optparse-applicative >=0.17 && <0.19
+    , pandoc-symreg ==0.2.1.2
     , split
-    , srtree <=0.1.2.1
+    , srtree <=1.0.0.4
     , srtree-datasets
-    , srtree-eqsat
     , srtree-opt
     , srtree-stats
     , vector

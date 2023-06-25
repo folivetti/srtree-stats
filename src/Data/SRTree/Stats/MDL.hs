@@ -1,53 +1,53 @@
 {-# language FlexibleInstances #-}
-module Data.SRTree.Stats.MDL ( aic, bic, mdl, mdlFreq, replaceZeroTheta )
+module Data.SRTree.Stats.MDL ( aic, bic, mdl, mdlFreq, cl, cc, cp, replaceZeroTheta )
     where
 
 import Data.List ( nub )
-import Data.Maybe ( fromJust )
+import Data.Maybe ( fromJust, fromMaybe )
 import Control.Monad.Reader
 import qualified Numeric.LinearAlgebra as LA
+import qualified Data.Vector as V
 import Data.SRTree
+import Data.SRTree.Print ( showExpr )
+import Data.SRTree.Recursion ( cata, cataM ) 
 import Data.SRTree.Opt
 import Debug.Trace (trace)
 import Control.Monad.State
 
-type LogFun = Columns -> Column -> Column -> SRTree Int Double -> Double
+type LogFun = Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
 
 bic :: Maybe Double -> LogFun
-bic sErr x y theta t = (p + 1) * log n + 2 * negLogLikelihood sErr x y theta t
+bic sErr x y theta t = (p + 1) * log n + 2 * nll Gaussian sErr x y t theta
   where
-    p = fromIntegral $ LA.size theta
+    p = fromIntegral $ V.length theta
     n = fromIntegral $ LA.size y
 
 aic :: Maybe Double -> LogFun
-aic sErr x y theta t = 2 * (p + 1) + 2 * negLogLikelihood sErr x y theta t
+aic sErr x y theta t = 2 * (p + 1) + 2 * nll Gaussian sErr x y t theta
   where
-    p = fromIntegral $ LA.size theta
+    p = fromIntegral $ V.length theta
     n   = fromIntegral $ LA.size y
 
 buildMDL :: [LogFun] -> LogFun
 buildMDL fs x y theta t = foldr (\f acc -> acc + f x y theta t) 0 fs
 
+nll' d se x y theta t = nll d se x y t theta
+
+cl, cc, cp :: Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
+cl sErr x y theta t = nll' Gaussian sErr x y theta t
+cc sErr x y theta t = logFunctionalSimple x y theta t
+cp sErr x y theta t = logParameters sErr x y theta t
+
 mdl :: Maybe Double -> LogFun
-mdl sErr = buildMDL [negLogLikelihood sErr, logFunctionalSimple, logParameters sErr]
+mdl sErr = buildMDL [nll' Gaussian sErr, logFunctionalSimple, logParameters sErr]
 
 mdlFreq :: Maybe Double -> LogFun
-mdlFreq sErr = buildMDL [negLogLikelihood sErr, logFunctionalFreq, logParameters sErr]
-
-negLogLikelihood :: Maybe Double -> LogFun
-negLogLikelihood msErr x y theta t = 0.5*ssr/(sErr*sErr) + 0.5*m*log(2*pi*sErr*sErr)
-  where
-    m   = fromIntegral $ LA.size y
-    n   = fromIntegral $ LA.size theta
-    ssr = sse x y t
-    sErr = case msErr of
-           Nothing -> sqrt $ ssr / (m - n)
-           Just x  -> x
+mdlFreq sErr = buildMDL [nll' Gaussian sErr, logFunctionalFreq, logParameters sErr]
 
 logFunctionalSimple :: LogFun
-logFunctionalSimple _ _ theta t = (countNodes' t) * log (countUniqueTokens' t') + logC + (fromIntegral $ length consts) * log(2)
+logFunctionalSimple _ _ _ t = (countNodes' t) * log (countUniqueTokens' t') + logC + (fromIntegral $ length consts) * log(2)
   where
-    t'                 = constToParam t
+    (t', _)            = floatConstsToParam t
     countNodes'        = fromIntegral . countNodes
     countUniqueTokens' = fromIntegral . length . nub . getOps
     consts             = getIntConsts t
@@ -57,13 +57,13 @@ logFunctionalSimple _ _ theta t = (countNodes' t) * log (countUniqueTokens' t') 
 logFunctionalFreq  :: LogFun
 logFunctionalFreq _ _ _ t = opToNat t' + logC + length' vars * (log (length' $ nub vars)) -- + (length' consts) * log(2)
   where
-    t'                 = constToParam t
+    (t', _)            = floatConstsToParam t
     consts             = getIntConsts t
     logC               = sum . map (log . abs) $ consts
-    length' = fromIntegral . length
-    vars = filter isVar $ getOps t
-    isVar (VarOp _) = True
-    isVar _         = False
+    length'            = fromIntegral . length
+    vars               = filter isVar $ getOps t
+    isVar (VarToken _) = True
+    isVar _            = False
 
 logFunctionalFreqUniq  :: LogFun
 logFunctionalFreqUniq _ _ _ t = opToNatUniq t + logC t
@@ -73,90 +73,79 @@ logFunctionalFreqUniq _ _ _ t = opToNatUniq t + logC t
 logParameters :: Maybe Double -> LogFun
 logParameters msErr x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
   where
-    p         = LA.size theta
-    logTheta  = LA.toList . log . abs $ theta
+    p         = V.length theta
+    logTheta  = V.toList $ V.map (log . abs) theta
     logFisher = map ((* 0.5) . log) $ fisherInfo msErr x y theta t
 
-fisherInfo :: Maybe Double -> Columns -> Column -> Column -> SRTree Int Double -> [Double]
+fisherInfo :: Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> [Double]
 fisherInfo msErr x y theta t = do 
   ix <- [0 .. p-1]
-  let f'      = deriveBy ix t'
-      f''     = deriveBy ix f'
-      fvals'  = evalSRTree theta f'
-      fvals'' = evalSRTree theta f''
+  let f'      = deriveBy True ix t'
+      f''     = deriveBy True ix f'
+      fvals'  = evalTree x theta LA.scalar f'
+      fvals'' = evalTree x theta LA.scalar f''
       f_ii    = LA.toList $ fvals' ^ 2 - res*fvals''
   pure $ sum f_ii / (sErr ^ 2)
   where
-    p    = LA.size theta
-    t'   = paramToVar $ varToConst x $ constToParam t
-    res  = y - evalSRTree theta t'
-    ssr  = sse x y t
+    p    = V.length theta
+    (t', _)   = floatConstsToParam t
+    res  = y - evalTree x theta LA.scalar t'
+    ssr  = sse x y t theta
     sErr = case msErr of
-           Nothing -> sqrt $ ssr / fromIntegral (LA.size y - p)
-           Just x  -> x
+             Nothing -> sqrt $ ssr / fromIntegral (LA.size y - p)
+             Just x  -> x
 
-evalSRTree :: Column -> SRTree Int Column -> Column
-evalSRTree theta tree = fromJust $ evalTree tree `runReader` (Just . LA.scalar . (theta LA.!))
+--evalSRTree :: Column -> Fix SRTree -> Column
+--evalSRTree theta tree = evalTree 
+-- fromJust $ evalTree tree `runReader` (Just . LA.scalar . (theta LA.!))
 
-data Op = PowOp | AddOp | SubOp | MulOp | DivOp | PowerOp | LogOp | VarOp Int | ConstOp | ParamOp | FunOp Function
-    deriving (Show, Eq, Ord)
-
-countUniqueTokens :: SRTree Int a -> Int
+countUniqueTokens :: Fix SRTree -> Int
 countUniqueTokens t = countFuns t + countOp t
   where
       countFuns = length . nub . getFuns
       countOp   = length . nub . getOps
 
-getIntConsts :: SRTree Int Double -> [Double]
-getIntConsts (Pow node i)  = fromIntegral i : getIntConsts node
-getIntConsts (Const x)     = [x | fromIntegral (round x) == x]
-getIntConsts (Fun _ node)  = getIntConsts node
-getIntConsts (Add l r)     = getIntConsts l <> getIntConsts r
-getIntConsts (Sub l r)     = getIntConsts l <> getIntConsts r
-getIntConsts (Mul l r)     = getIntConsts l <> getIntConsts r
-getIntConsts (Div l r)     = getIntConsts l <> getIntConsts r
-getIntConsts (Power l r)   = getIntConsts l <> getIntConsts r
-getIntConsts (LogBase l r) = getIntConsts l <> getIntConsts r
-getIntConsts _             = []
+getIntConsts :: Fix SRTree -> [Double]
+getIntConsts = cata alg
+  where
+    alg (Uni f t) = t
+    alg (Bin op l r) = l <> r
+    alg (Var ix) = []
+    alg (Param _) = []
+    alg (Const x) = [x | fromIntegral (round x) == x]
 
-getOps :: SRTree Int val -> [Op]
-getOps (Fun f node)  = FunOp f : getOps node
-getOps (Pow node _)  = PowOp : getOps node
-getOps (Add l r)     = AddOp : (getOps l <> getOps r)
-getOps (Sub l r)     = SubOp : (getOps l <> getOps r)
-getOps (Mul l r)     = MulOp : (getOps l <> getOps r)
-getOps (Div l r)     = DivOp : (getOps l <> getOps r)
-getOps (Power l r)   = PowerOp : (getOps l <> getOps r)
-getOps (LogBase l r) = LogOp : (getOps l <> getOps r)
-getOps (Var ix)       = [VarOp ix]
-getOps (Const _)     = [ConstOp]
-getOps (Param _)     = [ParamOp]
-getOps Empty         = []
+data CountToken = OpToken Op | FunToken Function | VarToken Int | ConstToken | ParamToken
+    deriving (Show, Eq, Ord)
 
-getFuns :: SRTree ix val -> [Function]
-getFuns (Fun f node)  = f : getFuns node
-getFuns (Pow node _)  = getFuns node
-getFuns (Add l r)     = getFuns l <> getFuns r
-getFuns (Sub l r)     = getFuns l <> getFuns r
-getFuns (Mul l r)     = getFuns l <> getFuns r
-getFuns (Div l r)     = getFuns l <> getFuns r
-getFuns (Power l r)   = getFuns l <> getFuns r
-getFuns (LogBase l r) = getFuns l <> getFuns r
-getFuns _             = []
+getOps :: Fix SRTree -> [CountToken]
+getOps = cata alg
+  where
+    alg (Uni f t) = FunToken f : t
+    alg (Bin op l r) = OpToken op : (l <> r)
+    alg (Var ix) = [VarToken ix]
+    alg (Param _) = [ParamToken]
+    alg (Const _) = [ConstToken]
 
-opToNat :: SRTree ix val -> Double
-opToNat (Var _)       = 0.6610799229372109
-opToNat (Param _)     = 0.6610799229372109
-opToNat (Const _)     = 0.6610799229372109
-opToNat (Mul l r)     = 1.720356134912558 + opToNat l + opToNat r
-opToNat (Div l r)     = 2.60436883851265 + opToNat l + opToNat r
-opToNat (Add l r)     = 2.500842464597881 + opToNat l + opToNat r
-opToNat (Sub l r)     = 2.500842464597881 + opToNat l + opToNat r
-opToNat (Power l r)   = 2.527957363394847 + opToNat l + opToNat r
-opToNat (Pow l _)     = 2.527957363394847 + opToNat l + 0.6610799229372109
-opToNat (LogBase l r) = 4.765599813200964 + opToNat l + opToNat r
-opToNat (Fun f l)     = funToNat f + opToNat l
-opToNat _             = 0
+getFuns :: Fix SRTree -> [Function]
+getFuns = cata alg
+  where
+    alg (Uni f t) = f : t
+    alg (Bin _ l r) = l <> r
+    alg _ = []
+
+opToNat :: Fix SRTree -> Double
+opToNat = cata alg
+  where
+    alg (Uni f t) = funToNat f + t
+    alg (Bin op l r) = opToNat' op + l + r
+    alg _ = 0.6610799229372109
+
+opToNat' :: Op -> Double
+opToNat' Add = 2.500842464597881
+opToNat' Sub = 2.500842464597881
+opToNat' Mul = 1.720356134912558
+opToNat' Div = 2.60436883851265
+opToNat' Power = 2.527957363394847
 
 funToNat :: Function -> Double
 funToNat Sqrt = 4.780867285331753
@@ -172,17 +161,19 @@ funToNat Tan  = 8.262107374667444
 funToNat _    = 8.262107374667444
 --funToNat Factorial = 7.702491586732021
 
-opToNatUniq :: SRTree ix val -> Double
-opToNatUniq (Var _)       = 0.49920052443651175
-opToNatUniq (Mul l r)     = 2.2113039088452564 + opToNatUniq l + opToNatUniq r
-opToNatUniq (Div l r)     = 2.723161258263767 + opToNatUniq l + opToNatUniq r
-opToNatUniq (Add l r)     = 2.706526197759235 + opToNatUniq l + opToNatUniq r
-opToNatUniq (Sub l r)     = 2.706526197759235 + opToNatUniq l + opToNatUniq r
-opToNatUniq (Power l r)   = 2.592699087013154 + opToNatUniq l + opToNatUniq r
-opToNatUniq (Pow l _)     = 2.592699087013154 + opToNatUniq l
-opToNatUniq (LogBase l r) = 4.5885325448350684 + opToNatUniq l + opToNatUniq r
-opToNatUniq (Fun f l)     = funToNatUniq f + opToNatUniq l
-opToNatUniq _             = 0
+opToNatUniq :: Fix SRTree -> Double
+opToNatUniq = cata alg
+  where
+    alg (Uni f t) = funToNatUniq f + t
+    alg (Bin op l r) = opToNatUniq' op + l + r
+    alg _ = 0.49920052443651175
+
+opToNatUniq' :: Op -> Double
+opToNatUniq' Add = 2.706526197759235
+opToNatUniq' Sub = 2.706526197759235
+opToNatUniq' Mul = 2.2113039088452564
+opToNatUniq' Div = 2.723161258263767
+opToNatUniq' Power = 2.592699087013154
 
 funToNatUniq :: Function -> Double
 funToNatUniq Sqrt = 4.887387917884975
@@ -198,27 +189,21 @@ funToNatUniq Tan  = 7.9897299264972235
 funToNatUniq _    = 7.9897299264972235
 --funToNatUniq Factorial = 7.584264818389059
 
-replaceZeroTheta :: Maybe Double -> Columns -> Column -> Column -> SRTree Int Double -> SRTree Int Double
-replaceZeroTheta msErr x y theta t = trace (show fisher) $ simplify t''
+replaceZeroTheta :: Maybe Double -> Columns -> Column -> Fix SRTree -> Fix SRTree
+replaceZeroTheta msErr x y t = t''
   where
-    fisher = fisherInfo msErr x y theta t
-    t'     = constToParam t
-    theta' = LA.toList theta
-    t'' = go t' `evalState` (zip theta' fisher)
+    fisher = fisherInfo msErr x y (V.fromList theta) t
+    (t', theta)     = floatConstsToParam t
+    info = zip theta fisher
+    t''    = go t'
 
-    go :: SRTree Int Double -> State [(Double, Double)] (SRTree Int Double)
-    go Empty         = pure Empty
-    go (Var ix)      = pure $ Var ix
-    go (Param _)     = do (v, f) <- gets head
-                          modify tail
-                          let v' = if abs (v / sqrt(12 / f) ) < 1 then 0 else v
-                          pure $ Const v'
-    go (Const v)     = pure $ Const v
-    go (Fun f t)     = Fun f <$> go t
-    go (Pow t i)     = (`Pow` i) <$> go t
-    go (Add l r)     = do { l' <- go l; r' <- go r; pure $ Add l' r' }
-    go (Sub l r)     = do { l' <- go l; r' <- go r; pure $ Sub l' r' }
-    go (Mul l r)     = do { l' <- go l; r' <- go r; pure $ Mul l' r' }
-    go (Div l r)     = do { l' <- go l; r' <- go r; pure $ Div l' r' }
-    go (Power l r)   = do { l' <- go l; r' <- go r; pure $ Power l' r' }
-    go (LogBase l r) = do { l' <- go l; r' <- go r; pure $ LogBase l' r' }
+    go :: Fix SRTree -> Fix SRTree
+    go = cata alg
+      where
+        alg (Var ix)  = Fix (Var ix)
+        alg (Const c) =  Fix (Const c)
+        alg (Param ix) = let (v, f) = info !! ix
+                             v' = if abs (v / sqrt(12 / f) ) < 1 then 0 else v
+                              in Fix (Const v')
+        alg (Uni f t) = Fix (Uni f t)
+        alg (Bin op l r) = Fix (Bin op l r)
