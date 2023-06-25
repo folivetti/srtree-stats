@@ -7,7 +7,7 @@ import Data.Bifunctor (first)
 import Data.ByteString.Char8 qualified as B
 import Data.Char (toLower, toUpper)
 import Data.List (intercalate)
-import Data.SRTree (SRTree, Fix, countNodes, floatConstsToParam)
+import Data.SRTree (SRTree, Fix, countNodes, floatConstsToParam, paramsToConst)
 import Data.SRTree.EqSat (simplifyEqSat)
 import Data.SRTree.Opt hiding (loadDataset)
 import Data.SRTree.Stats.MDL (aic, bic, mdl, mdlFreq, cl, cc, cp, replaceZeroTheta)
@@ -19,7 +19,7 @@ import System.IO (IOMode (WriteMode), hClose, hPutStrLn, openFile, stdout)
 import Text.ParseSR (SRAlgs (..))
 import Text.ParseSR.IO (withInput)
 import Text.Read (readMaybe)
-
+import Debug.Trace ( trace )
 import qualified Data.SRTree.Print as SRP
 
 envelope :: a -> [a] -> [a]
@@ -153,8 +153,8 @@ main = do
                                 then tree
                                 else if niter args == 0
                                        then tree -- replaceZeroTheta sErr xTr yTr tree
-                                       else (fst $ optimizer tree) -- replaceZeroTheta sErr xTr yTr (fst $ optimizer tree)
-                          (t, theta') = floatConstsToParam t'
+                                       else let (tt, th) = optimizer tree in paramsToConst (V.toList th) tt -- replaceZeroTheta sErr xTr yTr (fst $ optimizer tree)
+                          (t, theta') = trace (SRP.showExpr t') $ floatConstsToParam t'
                           theta = V.fromList theta'
                           sErr  = msErr args
                           sse' x y t = sse x y t theta

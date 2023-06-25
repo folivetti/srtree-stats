@@ -204,6 +204,11 @@ replaceZeroTheta msErr x y t = t''
         alg (Const c) =  Fix (Const c)
         alg (Param ix) = let (v, f) = info !! ix
                              v' = if abs (v / sqrt(12 / f) ) < 1 then 0 else v
-                              in Fix (Const v')
+                          in Fix (Const v')
         alg (Uni f t) = Fix (Uni f t)
-        alg (Bin op l r) = Fix (Bin op l r)
+        alg (Bin op l r) = case op of
+                            Add -> l + r -- Fix (Bin op l r)
+                            Sub -> l - r
+                            Mul -> l * r
+                            Div -> l / r
+                            Power -> l ** r
