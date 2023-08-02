@@ -23,12 +23,12 @@ dependencies:
 - base >= 4.7 && < 5
 - srtree <= 1.0.0.4
 #- pandoc-symreg >= 0.1.0.1
-- pandoc-symreg == 0.2.1.2
+- pandoc-symreg == 0.2.1.3
 - hmatrix
 - hmatrix-gsl
 - hmatrix-morpheus
 - bytestring >= 0.11 && < 0.12
-- optparse-applicative >= 0.17 && < 0.19
+- optparse-applicative >= 0.18 && < 0.19
 - mtl >= 2.2 && < 2.3
 - vector
 - split

@@ -16,14 +16,14 @@ import Control.Monad.State
 
 type LogFun = Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
 
-bic :: Maybe Double -> LogFun
-bic sErr x y theta t = (p + 1) * log n + 2 * nll Gaussian sErr x y t theta
+bic :: Distribution -> Maybe Double -> LogFun
+bic d sErr x y theta t = (p + 1) * log n + 2 * nll d sErr x y t theta
   where
     p = fromIntegral $ V.length theta
     n = fromIntegral $ LA.size y
 
-aic :: Maybe Double -> LogFun
-aic sErr x y theta t = 2 * (p + 1) + 2 * nll Gaussian sErr x y t theta
+aic :: Distribution -> Maybe Double -> LogFun
+aic d sErr x y theta t = 2 * (p + 1) + 2 * nll d sErr x y t theta
   where
     p = fromIntegral $ V.length theta
     n   = fromIntegral $ LA.size y
@@ -31,18 +31,20 @@ aic sErr x y theta t = 2 * (p + 1) + 2 * nll Gaussian sErr x y t theta
 buildMDL :: [LogFun] -> LogFun
 buildMDL fs x y theta t = foldr (\f acc -> acc + f x y theta t) 0 fs
 
+nll' :: Distribution -> Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
 nll' d se x y theta t = nll d se x y t theta
 
-cl, cc, cp :: Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
-cl sErr x y theta t = nll' Gaussian sErr x y theta t
+cl :: Distribution -> Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
+cc, cp :: Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
+cl d sErr x y theta t = nll' d sErr x y theta t
 cc sErr x y theta t = logFunctionalSimple x y theta t
 cp sErr x y theta t = logParameters sErr x y theta t
 
-mdl :: Maybe Double -> LogFun
-mdl sErr = buildMDL [nll' Gaussian sErr, logFunctionalSimple, logParameters sErr]
+mdl :: Distribution -> Maybe Double -> LogFun
+mdl d sErr = buildMDL [nll' d sErr, logFunctionalSimple, logParameters sErr]
 
-mdlFreq :: Maybe Double -> LogFun
-mdlFreq sErr = buildMDL [nll' Gaussian sErr, logFunctionalFreq, logParameters sErr]
+mdlFreq :: Distribution -> Maybe Double -> LogFun
+mdlFreq d sErr = buildMDL [nll' d sErr, logFunctionalFreq, logParameters sErr]
 
 logFunctionalSimple :: LogFun
 logFunctionalSimple _ _ _ t = (countNodes' t) * log (countUniqueTokens' t') + logC + (fromIntegral $ length consts) * log(2)

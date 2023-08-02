@@ -49,6 +49,20 @@ s2Reader = do
     Nothing -> pure . Left $ "wrong format " <> s
     mx      -> pure . Right $ mx
 
+distHelp :: [String]                                                                                          
+distHelp = map (envelope '\'' . map toLower . show) [toEnum 0 :: Distribution ..]                             
+{-# INLINE distHelp #-}
+
+distRead :: ReadM (Maybe Distribution)                                                                        
+distRead = do
+    d <- capitalize <$> str
+    eitherReader $ case readMaybe d of
+                     Nothing -> pure . Left $ "unsupported distribution " <> d
+                     Just x  -> pure . Right $ Just x
+    where
+      capitalize ""     = ""
+      capitalize (c:cs) = toUpper c : map toLower cs
+
 data Args = Args
     {   from        :: SRAlgs
       , infile      :: String
@@ -59,6 +73,7 @@ data Args = Args
       , hasHeader   :: Bool
       , simpl       :: Bool
       , msErr       :: Maybe Double
+      , dist        :: Maybe Distribution
     } deriving Show
 
 opt :: Parser Args
@@ -112,6 +127,13 @@ opt = Args
        <> showDefault
        <> value Nothing
        <> help "Estimated standard error of the data. If not passed, it uses the model MSE.")
+   <*> option distRead
+       ( long "distribution"
+       <> metavar ("[" <> intercalate "|" distHelp <> "]")                                                   
+       <> showDefault                                                                                        
+       <> value Nothing                                                                                      
+       <> help "Minimize negative log-likelihood following one of the avaliable distributions. The default will use least squares to optimize the model."
+       ) 
 
 printResults :: String -> String -> (Fix SRTree -> String) -> [Either String (Fix SRTree)] -> IO ()
 printResults fname header f exprs = do
@@ -144,7 +166,10 @@ main = do
               else Just <$> loadDataset (test args) (hasHeader args)
   let Just ((xTr, yTr, xVal, yVal), headers) = mTrain
       Just ((xTe, yTe, _, _), _) = mTest
-      optimizer     = optimize (Just Gaussian) (msErr args) (niter args) xTr yTr
+      myDist = case dist args of
+                 Nothing -> Gaussian
+                 Just x  -> x
+      optimizer     = optimize (Just myDist) (msErr args) (niter args) xTr yTr Nothing
       varnames      = mUnless (null $ dataset args) headers
       header_csv = "number_nodes,number_params" 
                  <> mUnless (null $ dataset args) ",sse_train,sse_val,mse_train,mse_val,bic,aic,mdl,mdl_freq,cl,cc,cp" 
@@ -153,19 +178,20 @@ main = do
                                 then tree
                                 else if niter args == 0
                                        then tree -- replaceZeroTheta sErr xTr yTr tree
-                                       else let (tt, th) = optimizer tree in paramsToConst (V.toList th) tt -- replaceZeroTheta sErr xTr yTr (fst $ optimizer tree)
+                                       else let (tt, th, _) = optimizer tree in paramsToConst (V.toList th) tt -- replaceZeroTheta sErr xTr yTr (fst $ optimizer tree)
                           (t, theta') = trace (SRP.showExpr t') $ floatConstsToParam t'
                           theta = V.fromList theta'
                           sErr  = msErr args
                           sse' x y t = sse x y t theta
                           mse' x y t = mse x y t theta
+                          
                           stats = [fromIntegral . countNodes, fromIntegral . const (V.length theta)]
                                 <> mUnless (null $ dataset args) 
                                        [ sse' xTr yTr, sse' xVal yVal
                                        , mse' xTr yTr , mse' xVal yVal
-                                       , bic sErr xTr yTr theta , aic sErr xTr yTr theta
-                                       , mdl sErr xTr yTr theta , mdlFreq sErr xTr yTr theta
-                                       , cl sErr xTr yTr theta
+                                       , bic myDist sErr xTr yTr theta , aic myDist sErr xTr yTr theta
+                                       , mdl myDist sErr xTr yTr theta , mdlFreq myDist sErr xTr yTr theta
+                                       , cl myDist sErr xTr yTr theta
                                        , cc sErr xTr yTr theta
                                        , cp sErr xTr yTr theta
                                        ]

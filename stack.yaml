@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-20.26
+resolver: lts-21.5
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -43,13 +43,13 @@ packages:
 extra-deps:                                                                                                   
   - srtree-1.0.0.4
   - git: https://github.com/folivetti/pandoc-symreg.git
-    commit: 73220e2765619bc54dcf10c7d1a5547b0aab0afc
+    commit: 662cae4f4c4eece00fdb747176d24aeb63b97024
   - hegg-0.3.0.0
   - git: https://github.com/folivetti/srtree-opt.git
-    commit: df7f5e8f5f06edd1a0eab37b87deb6ba966888ef
+    commit: a5be3d119f1119177b52f6ad943ab7a281dadd2e
   - git: https://github.com/folivetti/srtree-datasets.git
     commit: a0c09b3c339471b086518c774dee4a00be37649b 
-
+  - optparse-applicative-0.18.1.0@sha256:b4cf8d9018e5e67cb1f14edb5130b6d05ad8bc1b5f6bd4efaa6ec0b7f28f559d,5132
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
