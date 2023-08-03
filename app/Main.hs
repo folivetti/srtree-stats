@@ -193,7 +193,7 @@ main = do
                                        , mdl myDist sErr xTr yTr theta , mdlFreq myDist sErr xTr yTr theta
                                        , cl myDist sErr xTr yTr theta
                                        , cc sErr xTr yTr theta
-                                       , cp sErr xTr yTr theta
+                                       , cp myDist sErr xTr yTr theta
                                        ]
                                 <> mUnless (null (dataset args) || null (test args)) 
                                        [sse' xTe yTe, mse' xTe yTe]

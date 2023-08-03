@@ -30,26 +30,26 @@ packages:
   original:
     hackage: hegg-0.3.0.0
 - completed:
-    commit: a5be3d119f1119177b52f6ad943ab7a281dadd2e
+    commit: 685297637280877d814bafdfc7041fb43f85c88d
     git: https://github.com/folivetti/srtree-opt.git
     name: srtree-opt
     pantry-tree:
-      sha256: 352f94133fd6af18047fd712125324727602726dc006b27ce4f201c2356a9a05
+      sha256: caf37a75327b073da5d0f0898889995de7cf952ea1cd071f7c5a15e173a4a45f
       size: 1468
     version: 0.1.0.0
   original:
-    commit: a5be3d119f1119177b52f6ad943ab7a281dadd2e
+    commit: 685297637280877d814bafdfc7041fb43f85c88d
     git: https://github.com/folivetti/srtree-opt.git
 - completed:
-    commit: a0c09b3c339471b086518c774dee4a00be37649b
+    commit: 14855a30e954c57d776a1e3a3c8596c17de63b3c
     git: https://github.com/folivetti/srtree-datasets.git
     name: srtree-datasets
     pantry-tree:
-      sha256: df566b7b39b96fb1833b8769dad85fa02c352f624de851470a05626e2f147303
-      size: 691
+      sha256: 226e2ad3d5c4cbecf505be49a506ae99d35b12489c621c6f58891d5cc23ba25a
+      size: 693
     version: 0.1.0.0
   original:
-    commit: a0c09b3c339471b086518c774dee4a00be37649b
+    commit: 14855a30e954c57d776a1e3a3c8596c17de63b3c
     git: https://github.com/folivetti/srtree-datasets.git
 - completed:
     hackage: optparse-applicative-0.18.1.0@sha256:b4cf8d9018e5e67cb1f14edb5130b6d05ad8bc1b5f6bd4efaa6ec0b7f28f559d,5132

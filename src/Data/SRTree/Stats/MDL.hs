@@ -16,35 +16,44 @@ import Control.Monad.State
 
 type LogFun = Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
 
+-- | Bayesian information criterion
 bic :: Distribution -> Maybe Double -> LogFun
 bic d sErr x y theta t = (p + 1) * log n + 2 * nll d sErr x y t theta
   where
     p = fromIntegral $ V.length theta
     n = fromIntegral $ LA.size y
 
+-- | Akaike information criterion
 aic :: Distribution -> Maybe Double -> LogFun
 aic d sErr x y theta t = 2 * (p + 1) + 2 * nll d sErr x y t theta
   where
     p = fromIntegral $ V.length theta
     n   = fromIntegral $ LA.size y
 
+-- | Helper function to build an MDL function as the sum of different criteria
 buildMDL :: [LogFun] -> LogFun
 buildMDL fs x y theta t = foldr (\f acc -> acc + f x y theta t) 0 fs
 
+-- | Helper function to invert the final arguments of nll to be compatible with LogFun (check if it is really needed)
 nll' :: Distribution -> Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
 nll' d se x y theta t = nll d se x y t theta
 
-cl :: Distribution -> Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
-cc, cp :: Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
+-- | The negative log-likelihood (cl), log-functional structure (cc), log-parameters (cp)
+cl, cp :: Distribution -> Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
+cc :: Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> Double
 cl d sErr x y theta t = nll' d sErr x y theta t
+cp d sErr x y theta t = logParameters d sErr x y theta t
 cc sErr x y theta t = logFunctionalSimple x y theta t
-cp sErr x y theta t = logParameters sErr x y theta t
 
+-- | MDL as described in 
+-- Bartlett, Deaglan J., Harry Desmond, and Pedro G. Ferreira. "Exhaustive symbolic regression." IEEE Transactions on Evolutionary Computation (2023).
 mdl :: Distribution -> Maybe Double -> LogFun
-mdl d sErr = buildMDL [nll' d sErr, logFunctionalSimple, logParameters sErr]
+mdl d sErr = buildMDL [nll' d sErr, logFunctionalSimple, logParameters d sErr]
 
+-- | same as `mdl` but weighting the functional structure by frequency calculated using a wiki information of
+-- physics and engineering functions
 mdlFreq :: Distribution -> Maybe Double -> LogFun
-mdlFreq d sErr = buildMDL [nll' d sErr, logFunctionalFreq, logParameters sErr]
+mdlFreq d sErr = buildMDL [nll' d sErr, logFunctionalFreq, logParameters d sErr]
 
 logFunctionalSimple :: LogFun
 logFunctionalSimple _ _ _ t = (countNodes' t) * log (countUniqueTokens' t') + logC + (fromIntegral $ length consts) * log(2)
@@ -54,7 +63,7 @@ logFunctionalSimple _ _ _ t = (countNodes' t) * log (countUniqueTokens' t') + lo
     countUniqueTokens' = fromIntegral . length . nub . getOps
     consts             = getIntConsts t
     logC               = sum . map (log . abs) $ consts
-    signs = sum [1 | a <- getIntConsts t, a < 0] -- + sum [1 | a <- LA.toList theta, a < 0]
+    signs              = sum [1 | a <- getIntConsts t, a < 0] -- + sum [1 | a <- LA.toList theta, a < 0]
 
 logFunctionalFreq  :: LogFun
 logFunctionalFreq _ _ _ t = opToNat t' + logC + length' vars * (log (length' $ nub vars)) -- + (length' consts) * log(2)
@@ -72,14 +81,14 @@ logFunctionalFreqUniq _ _ _ t = opToNatUniq t + logC t
   where
     logC = sum . map (log . abs) . getIntConsts
 
-logParameters :: Maybe Double -> LogFun
-logParameters msErr x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
+logParameters :: Distribution -> Maybe Double -> LogFun
+logParameters d msErr x y theta t = -(fromIntegral p / 2) * log 3 + sum logFisher + sum logTheta
   where
     p         = V.length theta
     logTheta  = V.toList $ V.map (log . abs) theta
-    logFisher = map ((* 0.5) . log) $ fisherInfo msErr x y theta t
-
-fisherInfo :: Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> [Double]
+    logFisher = map ((* 0.5) . log) $ fisherNLL d msErr x y t theta -- is (*0.5) dependent of guassian?
+{-
+fisherInfo :: Distribution -> Maybe Double -> Columns -> Column -> V.Vector Double -> Fix SRTree -> [Double]
 fisherInfo msErr x y theta t = do 
   ix <- [0 .. p-1]
   let f'      = deriveBy True ix t'
@@ -96,11 +105,7 @@ fisherInfo msErr x y theta t = do
     sErr = case msErr of
              Nothing -> sqrt $ ssr / fromIntegral (LA.size y - p)
              Just x  -> x
-
---evalSRTree :: Column -> Fix SRTree -> Column
---evalSRTree theta tree = evalTree 
--- fromJust $ evalTree tree `runReader` (Just . LA.scalar . (theta LA.!))
-
+-}
 countUniqueTokens :: Fix SRTree -> Int
 countUniqueTokens t = countFuns t + countOp t
   where
@@ -191,10 +196,10 @@ funToNatUniq Tan  = 7.9897299264972235
 funToNatUniq _    = 7.9897299264972235
 --funToNatUniq Factorial = 7.584264818389059
 
-replaceZeroTheta :: Maybe Double -> Columns -> Column -> Fix SRTree -> Fix SRTree
-replaceZeroTheta msErr x y t = t''
+replaceZeroTheta :: Distribution -> Maybe Double -> Columns -> Column -> Fix SRTree -> Fix SRTree
+replaceZeroTheta d msErr x y t = t''
   where
-    fisher = fisherInfo msErr x y (V.fromList theta) t
+    fisher = fisherNLL d msErr x y t (V.fromList theta)
     (t', theta)     = floatConstsToParam t
     info = zip theta fisher
     t''    = go t'
@@ -209,7 +214,7 @@ replaceZeroTheta msErr x y t = t''
                           in Fix (Const v')
         alg (Uni f t) = Fix (Uni f t)
         alg (Bin op l r) = case op of
-                            Add -> l + r -- Fix (Bin op l r)
+                            Add -> l + r
                             Sub -> l - r
                             Mul -> l * r
                             Div -> l / r
